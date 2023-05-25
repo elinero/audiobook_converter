@@ -23,12 +23,11 @@ Hoping this helps you out also!
    ```
    npm i
    ```
-  Then you can use the start script to input the file path to your epub and the desired language
-
-  ```
-  npm run start /path/to/my/epub english
-  ```
-  The app will run and place the text file under the textfiles folder.
-  When the audio is finished it will place your audio file under the audiobooks folder.
+3. Then you can use the start script to input the file path to your epub and the desired language
+   ```
+   npm run start /path/to/my/epub english
+   ```
+   The app will run and place the text file under the textfiles folder.
+   When the audio is finished it will place your audio file under the audiobooks folder.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
