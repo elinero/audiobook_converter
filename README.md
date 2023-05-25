@@ -20,9 +20,9 @@ Hoping this helps you out also!
    git clone https://github.com/elinero/audiobook_converter.git
    ```
 2. After checking out the repo run:
-  ```
-  npm i
-  ```
+   ```
+   npm i
+   ```
   Then you can use the start script to input the file path to your epub and the desired language
 
   ```
