@@ -16,7 +16,7 @@ Hoping this helps you out also!
 ### Installation
 
 1. Clone the repo
-   ```sh
+   ```
    git clone https://github.com/elinero/audiobook_converter.git
    ```
 2. After checking out the repo run:
