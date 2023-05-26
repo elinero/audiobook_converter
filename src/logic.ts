@@ -3,6 +3,7 @@ import { Epub } from '@gxl/epub-parser/lib/parseEpub';
 import { convert } from 'html-to-text';
 import { promises } from 'fs';
 import { LANGUAGES } from './languages';
+import { AudioSection } from './types/types';
 const gTTS = require('gtts');
 
 
@@ -38,8 +39,8 @@ const randomAlphaNumeric = (length: number) => {
     return s.slice(0, length);
 };
 
-export const fetchDataFromEpub = async (filePath: string): Promise<Array<string | undefined> | undefined>  => {
-    let result: Array<string | undefined> | undefined;
+export const fetchDataFromEpub = async (filePath: string): Promise<Array<AudioSection> | undefined>  => {
+    let result: Array<AudioSection> | undefined;
 
     try {
         const epubObj: Epub = await parseEpub(filePath, {
@@ -48,19 +49,17 @@ export const fetchDataFromEpub = async (filePath: string): Promise<Array<string 
 
         const sections = epubObj?.sections;
 
-        const textPerSection: Array<string | undefined> | undefined = sections 
+        return sections
             ? sections.map(section => {
-                const htmlString: string | undefined = section.htmlString;
+                const title: string = section.id ? section.id : randomAlphaNumeric(11);
+                const content: string = section.htmlString ? convert(section.htmlString) : '';
 
-                if (htmlString) {
-                  return convert(htmlString);
+                return {
+                    title,
+                    content,
                 }
-            }) 
+            })
             : undefined;
-        
-        result = textPerSection;
-
-        return result;
     } catch (err) {
         console.error('could not parse epub!');
 
@@ -68,54 +67,30 @@ export const fetchDataFromEpub = async (filePath: string): Promise<Array<string 
     }
 }
 
-export const writeTextDataToFile = async ({ textData, bookName }: {
-    textData: Array<string | undefined>;
+export const createAudiobook = async ({ textData, bookName, language }: {
+    textData: Array<AudioSection>;
     bookName: string;
-}): Promise<string | null> => {
-    const hasAllStrings: boolean = textData.every(item => typeof(item) === 'string');
-
-    let textBlob: string;
-    let textFilePath: string;
-
-    if (hasAllStrings) {
-        textBlob = textData.reduce((acc: string, curr: string | undefined) => {
-            if (!curr) {
-                curr = '';
-            }
-
-            acc += curr + '\n';
-            return acc;
-        }, '' as string);
-
-        if (textBlob) {
-            const randomStr = `${bookName}.${randomAlphaNumeric(13)}`;
-            textFilePath = `./textfiles/${randomStr}.txt`;
-            await promises.writeFile(textFilePath, textBlob);
-
-            return textFilePath;
-        }
-        return null;
-    }
-
-    return null;
-}
-
-export const createAudiobook = async ({ textFilePath, language }: {
-    textFilePath: string;
     language: string;
 }) => {
-    let dataToRead: string;
-
     try {
-        dataToRead = await promises.readFile(textFilePath, 'utf8');
+        const audiobookDir = `./audiobooks/${bookName}.${randomAlphaNumeric(13)}`;
+        await promises.mkdir(audiobookDir);
 
-        const gtts = new gTTS(dataToRead, getKeyFromLanguageMap(language));
-        const textFilePathArr = textFilePath.split('/');
-        const audioFileName = textFilePathArr[textFilePathArr.length - 1].replace('.txt', '');
+        textData.map((section: AudioSection) => {
+            const { title, content } = section;
 
-        gtts.save(`./audiobooks/${audioFileName}.mp3`, function (err, result) {
-            if(err) { throw new Error(err) }
-            console.log('Success! File created in audiobooks folder');
+            if (content) {
+                const gtts = new gTTS(content, getKeyFromLanguageMap(language));
+                const fileName: string = `${audiobookDir}/${title}.mp3`;
+
+                gtts.save(fileName, function (err, result) {
+                    if(err) {
+                        console.error(err); 
+                        throw new Error(err) 
+                    }
+                    console.log(`Success! created ${fileName}`);
+                });
+            }
         });
     } catch (err) {
         console.error('could not generate audiobook');

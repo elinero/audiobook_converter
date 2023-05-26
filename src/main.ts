@@ -2,7 +2,6 @@
 
 import { 
     fetchDataFromEpub,
-    writeTextDataToFile,
     createAudiobook,
 } from './logic';
 
@@ -17,9 +16,7 @@ import {
         const textData = await fetchDataFromEpub(filePath);
 
         if (textData && textData.length && textData.length > 0) {
-            const textFilePath = await writeTextDataToFile({ textData, bookName });
-
-            if (textFilePath) await createAudiobook({ textFilePath, language });
+            await createAudiobook({ textData, bookName, language });
         }
     }
 })();
