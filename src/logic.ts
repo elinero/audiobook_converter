@@ -2,72 +2,67 @@ import { parseEpub } from '@gxl/epub-parser';
 import { Epub } from '@gxl/epub-parser/lib/parseEpub';
 import { convert } from 'html-to-text';
 import { promises } from 'fs';
-import { LANGUAGES } from './languages';
-import { AudioSection } from './types/types';
-const gTTS = require('gtts');
+import { TextToSpeechClient, protos } from "@google-cloud/text-to-speech"
+import { 
+    AudioSection,
+    UserInputData,
+ } from './types/types';
+import {
+    getKeyFromLanguageMap,
+    randomAlphaNumeric,
+} from './helpers/helpers';
 
+export const fetchUserInput = (): UserInputData => {
+    const filePath: string = process.argv[2];
+    const language: string = process.argv[3] || 'english';
 
-const getCapitalCase = (str: string) => {
-    const arr = str.split('');
-
-    for (let i = 0; i < arr.length; i++) {
-        arr[i] = arr[i].charAt(0).toUpperCase() + arr[i].slice(1);
+    if (!filePath) {
+        throw new Error('Filepath must be defined');
     }
 
-    return arr.join();
-}
-
-const inverse = (obj:Object ) => {
-    let retobj = {};
-    for(let key in obj){
-      retobj[obj[key]] = key;
+    return {
+        filePath,
+        language,
     }
-    return retobj;
 }
 
-const getKeyFromLanguageMap = (input: string) => {
-    const inverseLanguageMap = inverse(LANGUAGES);
-    return inverseLanguageMap[getCapitalCase(input)];
-} 
+export const getBookNameFromFilePath = (filePath: string): string => {
+    const filePathArr: string[] = filePath.split('/');
+    return filePathArr[filePathArr.length - 1];
+}
 
-const randomAlphaNumeric = (length: number) => {
-    let s = '';
-    Array.from({ length }).some(() => {
-      s += Math.random().toString(36).slice(2);
-      return s.length >= length;
-    });
-    return s.slice(0, length);
-};
-
-export const fetchDataFromEpub = async (filePath: string): Promise<Array<AudioSection> | undefined>  => {
-    let result: Array<AudioSection> | undefined;
-
+export const fetchDataFromEpub = async (filePath: string): Promise<Array<AudioSection> | Error>  => {
     try {
         const epubObj: Epub = await parseEpub(filePath, {
             type: 'path',
         });
 
-        const sections = epubObj?.sections;
+        const sections = epubObj!.sections;
 
-        return sections
-            ? sections.map(section => {
-                const title: string = section.id ? section.id : randomAlphaNumeric(11);
-                const content: string = section.htmlString ? convert(section.htmlString) : '';
+        if (!sections) {
+            throw new Error('Could not get sections from file...');
+        }
 
-                return {
-                    title,
-                    content,
-                }
-            })
-            : undefined;
+        else if (Array.isArray(sections) && sections.length < 1) {
+            throw new Error ('File content is empty');
+        }
+
+        return sections.map(section => {
+            const title: string = section.id ? section.id : randomAlphaNumeric(11);
+            const content: string = section.htmlString ? convert(section.htmlString) : '';
+
+            return {
+                title,
+                content,
+            }
+        }) as Array<AudioSection>;
     } catch (err) {
         console.error('could not parse epub!');
-
-        return result;
+        throw err;
     }
 }
 
-export const createAudiobook = async ({ textData, bookName, language }: {
+export const convertTextToAudio = async ({ textData, bookName, language }: {
     textData: Array<AudioSection>;
     bookName: string;
     language: string;
@@ -75,24 +70,50 @@ export const createAudiobook = async ({ textData, bookName, language }: {
     try {
         const audiobookDir = `./audiobooks/${bookName}.${randomAlphaNumeric(13)}`;
         await promises.mkdir(audiobookDir);
+        const ttsClient = new TextToSpeechClient();
 
-        textData.map((section: AudioSection) => {
+        textData.map(async (section: AudioSection) => {
             const { title, content } = section;
 
             if (content) {
-                const gtts = new gTTS(content, getKeyFromLanguageMap(language));
+                const request: protos.google.cloud.texttospeech.v1.ISynthesizeSpeechRequest = {
+                    input: { text: content },
+                    voice: { 
+                        languageCode: getKeyFromLanguageMap(language), 
+                        ssmlGender: 'NEUTRAL',
+                    },
+                    audioConfig: {
+                        audioEncoding: `MP3`,
+                        pitch: 0.00,
+                        speakingRate: 1.00
+                    },
+                }
+
+                const [response] = await ttsClient.synthesizeSpeech(request);
                 const fileName: string = `${audiobookDir}/${title}.mp3`;
 
-                gtts.save(fileName, function (err, result) {
-                    if(err) {
-                        console.error(err); 
-                        throw new Error(err) 
-                    }
-                    console.log(`Success! created ${fileName}`);
-                });
+                if (response && response.audioContent) {
+                    promises.writeFile(fileName, response.audioContent, 'binary');
+                    console.log(`Audio content written to file: ${fileName}`);
+                } 
             }
         });
     } catch (err) {
         console.error('could not generate audiobook');
+    }
+}
+
+export const createAudiobook = async () => {
+    try {
+        const { filePath, language } = fetchUserInput();
+
+        const bookName = getBookNameFromFilePath(filePath);
+
+        const textData = await fetchDataFromEpub(filePath) as Array<AudioSection>;
+
+        await convertTextToAudio({ textData, bookName, language });
+    } catch(err) {
+        console.error(err);
+        process.exit(1);
     }
 }
