@@ -1,10 +1,11 @@
 // could be a chapter, the different sections that an epub is split into
 export type AudioSection = {
+    idx: number;
     title: string,
     content: string;
 };
 
 export type UserInputData = {
     filePath: string;
-    language: string;
+    voice: string;
 }

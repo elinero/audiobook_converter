@@ -1,0 +1,1 @@
+export const MAX_CHUNK_SIZE: number = 5000;
